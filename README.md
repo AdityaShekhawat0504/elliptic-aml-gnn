@@ -4,9 +4,20 @@ Graph neural network for flagging illicit Bitcoin transactions — built to cut
 false positives and explain every flag as a money-laundering typology.
 
 ## Result
-- Non-graph baseline (XGBoost): _pending — milestone 2._
+- Non-graph baseline (XGBoost): flags **131 of 15,587 licit transactions as
+  illicit — a 0.84% false-positive rate** on the temporal test set (steps
+  35–49). Precision 0.86 / recall 0.74 / F1 0.79 on the illicit class.
 - GNN (GraphSAGE/GCN): _pending — milestone 3._
 - Key finding: _pending — milestone 3._
+
+The baseline (`baseline.py`) uses node features only — no edges, no graph
+structure — and is the comparison anchor for the GNN. Confusion matrix on the
+test set:
+
+|                  | pred licit | pred illicit |
+|------------------|-----------:|-------------:|
+| **true licit**   |     15,456 |          131 |
+| **true illicit** |        287 |          796 |
 
 Milestone 1 (EDA) is complete. The dataset is severely imbalanced — only
 **2.23% of all transactions are labeled illicit** — and carries a known
@@ -51,9 +62,11 @@ steps are expected to be hard. We do **not** model the time axis explicitly
 
 ## Run it
 ```bash
+# macOS only: xgboost needs the OpenMP runtime — run `brew install libomp` first
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python eda.py        # milestone 1 — prints stats, writes figures/class_imbalance.png
+python baseline.py   # milestone 2 — trains XGBoost baseline, prints test metrics
 ```
 
 ## Stack
