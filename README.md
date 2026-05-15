@@ -63,7 +63,7 @@ treats as ordinary, flagged by the GNN because their 2-hop neighbourhood
 touches illicit activity. The graph signal is **complementary** to the
 baseline, not a replacement for it.
 
-Milestone 1 (EDA) is complete. The dataset is severely imbalanced — only
+The dataset is severely imbalanced — only
 **2.23% of all transactions are labeled illicit** — and carries a known
 mid-timeline distribution shift that will make the later test steps the hard
 part of the problem. Details below.
