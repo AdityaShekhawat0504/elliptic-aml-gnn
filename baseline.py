@@ -23,6 +23,7 @@ from xgboost import XGBClassifier
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 RAW_DIR = os.path.join(ROOT, "data", "raw")
+OUT_DIR = os.path.join(ROOT, "outputs")
 
 # our label encoding (kept consistent with the rest of the project)
 LICIT, ILLICIT = 0, 1
@@ -55,6 +56,7 @@ def build_split(df, feature_cols):
 
     X_train, y_train = train[feature_cols].values, train["label"].values
     X_test, y_test = test[feature_cols].values, test["label"].values
+    tx_test = test["txId"].values
 
     print("=" * 60)
     print("TEMPORAL SPLIT (labeled nodes only)")
@@ -64,7 +66,7 @@ def build_split(df, feature_cols):
         n = len(yy)
         illicit = int((yy == ILLICIT).sum())
         print(f"  {name}: {n:>7,} nodes  |  illicit {illicit:>6,} ({100 * illicit / n:5.2f}%)")
-    return X_train, y_train, X_test, y_test
+    return X_train, y_train, X_test, y_test, tx_test
 
 
 def train(X_train, y_train):
@@ -89,8 +91,9 @@ def train(X_train, y_train):
     return clf
 
 
-def evaluate(clf, X_test, y_test):
+def evaluate(clf, X_test, y_test, tx_test):
     y_pred = clf.predict(X_test)
+    y_prob = clf.predict_proba(X_test)[:, ILLICIT]
 
     precision, recall, f1, _ = precision_recall_fscore_support(
         y_test, y_pred, labels=[ILLICIT], average=None, zero_division=0
@@ -115,14 +118,28 @@ def evaluate(clf, X_test, y_test):
     print(f"               pred licit   pred illicit")
     print(f"  true licit   {tn:>10,}   {fp:>12,}")
     print(f"  true illicit {fn:>10,}   {tp:>12,}")
+
+    # save test-set predictions so milestone 4 can compare the two models
+    os.makedirs(OUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUT_DIR, "baseline_test_predictions.csv")
+    pd.DataFrame(
+        {
+            "txId": tx_test,
+            "true_label": y_test,
+            "predicted_label": y_pred,
+            "predicted_prob": y_prob,
+        }
+    ).to_csv(out_path, index=False)
+    print()
+    print(f"saved test-set predictions -> {os.path.relpath(out_path, ROOT)}")
     return precision, recall, f1, fp_rate, (tn, fp, fn, tp)
 
 
 def main():
     df, feature_cols = load()
-    X_train, y_train, X_test, y_test = build_split(df, feature_cols)
+    X_train, y_train, X_test, y_test, tx_test = build_split(df, feature_cols)
     clf = train(X_train, y_train)
-    evaluate(clf, X_test, y_test)
+    evaluate(clf, X_test, y_test, tx_test)
 
 
 if __name__ == "__main__":
