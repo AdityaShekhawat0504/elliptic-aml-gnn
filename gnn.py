@@ -176,7 +176,7 @@ def evaluate(model, data, test_mask, tx_id):
     print(f"  false-positive rate: {fp_rate:.4f}  ({fp:,} of {fp + tn:,} licit flagged)")
     print()
     print("CONFUSION MATRIX (rows = true, cols = predicted)")
-    print(f"               pred licit   pred illicit")
+    print("               pred licit   pred illicit")
     print(f"  true licit   {tn:>10,}   {fp:>12,}")
     print(f"  true illicit {fn:>10,}   {tp:>12,}")
 

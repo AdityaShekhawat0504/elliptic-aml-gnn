@@ -34,6 +34,11 @@ TRAIN_STEPS_MAX = 34  # train on 1-34, test on 35-49
 
 def load():
     """Load labeled nodes only from the raw CSVs: features, time step, label."""
+    if not os.path.exists(os.path.join(RAW_DIR, "elliptic_txs_features.csv")):
+        raise FileNotFoundError(
+            f"raw Elliptic CSVs not found in {os.path.relpath(RAW_DIR, ROOT)}/ — "
+            "run `python eda.py` first to download the dataset."
+        )
     # features: no header — col 0 = txId, col 1 = time step, cols 2+ = features
     feat = pd.read_csv(os.path.join(RAW_DIR, "elliptic_txs_features.csv"), header=None)
     feat = feat.rename(columns={0: "txId", 1: "time_step"})
@@ -115,7 +120,7 @@ def evaluate(clf, X_test, y_test, tx_test):
     print(f"  false-positive rate: {fp_rate:.4f}  ({fp:,} of {fp + tn:,} licit flagged)")
     print()
     print("CONFUSION MATRIX (rows = true, cols = predicted)")
-    print(f"               pred licit   pred illicit")
+    print("               pred licit   pred illicit")
     print(f"  true licit   {tn:>10,}   {fp:>12,}")
     print(f"  true illicit {fn:>10,}   {tp:>12,}")
 
