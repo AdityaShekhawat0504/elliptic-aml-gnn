@@ -200,7 +200,6 @@ def describe_structure(node_idx, top_edges, true_label, full_deg):
     G = nx.Graph()
     for (u, v), w in top_edges:
         G.add_edge(u, v, weight=w)
-    nodes = list(G.nodes)
     degs = dict(G.degree())
     target_deg = degs.get(node_idx, 0)
     other_degs = [d for n, d in degs.items() if n != node_idx]

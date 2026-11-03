@@ -1,35 +1,58 @@
 # Explainable AML Detection on the Elliptic Bitcoin Graph
 
-Graph neural network for flagging illicit Bitcoin transactions — built to cut
-false positives and explain every flag as a money-laundering typology.
+[![CI](https://github.com/AdityaShekhawat0504/elliptic-aml-gnn/actions/workflows/ci.yml/badge.svg)](https://github.com/AdityaShekhawat0504/elliptic-aml-gnn/actions/workflows/ci.yml)
 
-## Result
-- Non-graph baseline (XGBoost): flags **131 of 15,587 licit transactions as
-  illicit — a 0.84% false-positive rate** on the temporal test set (steps
-  35–49). Precision 0.86 / recall 0.74 / F1 0.79 on the illicit class.
-- GNN (GraphSAGE): flags **327 of 15,587 licit transactions as illicit — a
-  2.10% false-positive rate** on the same test set. Precision 0.68 / recall
-  0.65 / F1 0.67 on the illicit class.
-- Key finding: the **16 illicit transactions the GNN uniquely caught** (that
-  the baseline missed) are almost all **degree-1 or degree-2 nodes** —
-  unremarkable to a feature-only model, but sitting one or two hops from known
-  illicit activity. The graph catches **guilt-by-association**, often through a
-  short **layering** chain or a fan-out hub; XGBoost structurally cannot see it.
+**A GraphSAGE GNN and an XGBoost baseline compared on 203k Bitcoin transactions. GNNExplainer then shows *which* laundering patterns only the graph can catch.**
 
-On raw illicit-class metrics the GNN does **not** beat the XGBoost baseline —
-expected and consistent with published results on this dataset, where the
-mid-timeline distribution shift makes the later test steps hard for any model.
-The point of the GNN is not a higher F1; it is *what kind of pattern the graph
-catches that node features alone miss* — surfaced through the explainer
-subgraphs below.
+## Problem
+Anti-money-laundering (AML) teams drown in alerts, so false positives, not
+accuracy, are the real cost in triage. A flag is only useful if an analyst can
+see *why* it fired. This repo asks a narrow question: on the public
+[Elliptic](https://www.kaggle.com/datasets/ellipticco/elliptic-data-set) Bitcoin
+transaction graph, what does a graph model catch that a strong feature-only model
+misses, and can each catch be explained as a recognisable typology (layering,
+fan-out, clustered movement of funds)?
 
-Both models are trained and evaluated on the **exact same temporal split**
-(29,894 labeled train nodes in steps 1–34, 16,670 labeled test nodes in steps
-35–49). `gnn.py` builds the split from time steps directly rather than using
-the dataset's built-in masks, so the test nodes are provably identical to
-`baseline.py`. The baseline (`baseline.py`) uses node features only — no edges,
-no graph structure — and is the comparison anchor for the GNN. Confusion
-matrices on the test set:
+## How it works
+```mermaid
+flowchart LR
+    D[(Elliptic graph<br/>203,769 tx<br/>234,355 edges)] --> S[Temporal split<br/>train steps 1-34<br/>test steps 35-49]
+    S --> B[XGBoost<br/>node features only]
+    S --> G[GraphSAGE<br/>features + edges]
+    B --> J{Join test<br/>predictions on txId}
+    G --> J
+    J --> K[Key set: illicit tx<br/>GNN caught, baseline missed]
+    K --> X[GNNExplainer<br/>2-hop subgraph]
+    X --> T[Typology read<br/>layering / fan-out / unclear]
+```
+Both models see the **identical** labeled test nodes. The disagreement between
+them isolates the graph-only signal, and GNNExplainer turns each of those cases
+into an auditable subgraph. More detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Results
+Test set: 16,670 labeled transactions in steps 35–49 (illicit class).
+
+| Model                     | Precision | Recall | F1   | False-positive rate          |
+|---------------------------|----------:|-------:|-----:|------------------------------|
+| XGBoost (features only)   | 0.86      | 0.74   | 0.79 | **0.84%** (131 of 15,587 licit) |
+| GraphSAGE (graph)         | 0.68      | 0.65   | 0.67 | 2.10% (327 of 15,587 licit)  |
+
+- **On raw metrics the GNN does not beat XGBoost.** This matches published
+  results on this dataset, where a mid-timeline distribution shift makes the
+  later test steps hard for any model.
+- **The GNN uniquely caught 16 illicit transactions that the baseline missed.**
+  Almost all of them are **degree-1 or degree-2 nodes**. A feature-only model
+  sees nothing unusual about them, but they sit one or two hops from known
+  illicit activity. This is guilt-by-association, often through a short
+  **layering** chain or a fan-out hub, and XGBoost structurally cannot see it.
+- The graph signal **complements** the baseline. It does not replace it: the
+  baseline uniquely catches 108 cases.
+
+Both models use the **exact same temporal split**: 29,894 labeled train nodes in
+steps 1–34 and 16,670 labeled test nodes in steps 35–49. `gnn.py` builds the
+split from time steps directly rather than from the dataset's built-in masks.
+The baseline uses node features only, with no edges. Confusion matrices on the
+test set:
 
 XGBoost baseline:
 
@@ -67,11 +90,6 @@ The dataset is severely imbalanced — only
 **2.23% of all transactions are labeled illicit** — and carries a known
 mid-timeline distribution shift that will make the later test steps the hard
 part of the problem. Details below.
-
-## Why this framing
-False positives, not accuracy, are the real cost in AML triage. Flags are mapped
-to named typologies (structuring, layering, rapid movement of funds) and each
-comes with an explainer subgraph — auditable, not a black box.
 
 ## Explainer examples
 GNNExplainer was run on the 5 highest-confidence cases from the **key set** —
@@ -153,20 +171,61 @@ the dataset, not noise: it is why temporal splits are used and why later test
 steps are expected to be hard. We do **not** model the time axis explicitly
 (no temporal GNN) — we only report it so later metrics are read in context.
 
-## Run it
+## Quickstart
+Requires Python 3.12 (the version CI tests; 3.13 also works). No API keys, secrets or environment variables are needed,
+so the repo has no `.env` file.
+
 ```bash
-# macOS only: xgboost needs the OpenMP runtime — run `brew install libomp` first
+git clone https://github.com/AdityaShekhawat0504/elliptic-aml-gnn.git
+cd elliptic-aml-gnn
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python eda.py        # milestone 1 — prints stats, writes figures/class_imbalance.png
-python baseline.py   # milestone 2 — XGBoost baseline; writes outputs/baseline_test_predictions.csv
-python gnn.py        # milestone 3 — GraphSAGE GNN; writes predictions + outputs/gnn_model.pt
-python explain.py    # milestone 4 — disagreement analysis + GNNExplainer; writes figures/explain_*.png
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+```
+macOS only: xgboost needs the OpenMP runtime, so run `brew install libomp`
+first. On macOS, omit `--extra-index-url`, because the default torch wheel is
+already CPU-only there.
+
+**Verify the install (seconds, no download):**
+```bash
+pip install -r requirements-dev.txt --extra-index-url https://download.pytorch.org/whl/cpu
+pytest
 ```
 
-All scripts are seeded (`SEED = 42`), so a clean run reproduces the numbers and
-figures above. Run `gnn.py` before `explain.py` — the explainer loads the model
-`gnn.py` saves to `outputs/gnn_model.pt` (gitignored; regenerable).
+**Reproduce the results.** Run the scripts in this order, because each one
+reads the previous one's outputs:
+```bash
+python eda.py        # downloads the dataset to data/ and writes figures/class_imbalance.png
+python baseline.py   # XGBoost baseline -> outputs/baseline_test_predictions.csv
+python gnn.py        # GraphSAGE (CPU)  -> outputs/gnn_test_predictions.csv + outputs/gnn_model.pt
+python explain.py    # disagreement analysis + GNNExplainer -> figures/explain_*.png
+```
+`eda.py` downloads the Elliptic dataset through PyTorch Geometric on its first
+run, which is a few hundred MB. `baseline.py` reads the raw CSVs from that
+download, so run `eda.py` first. All scripts are seeded (`SEED = 42`).
+`outputs/gnn_model.pt` is gitignored and regenerated by `gnn.py`. The two
+prediction CSVs are committed, so you can inspect results without re-running
+anything.
 
 ## Stack
-PyTorch Geometric · XGBoost · GNNExplainer
+Python · PyTorch · PyTorch Geometric (GraphSAGE, GNNExplainer) · XGBoost ·
+scikit-learn · pandas · NetworkX · Matplotlib · pytest · Ruff · GitHub Actions.
+Versions are pinned in `requirements.txt`.
+
+## Limitations
+- **The GNN loses on headline metrics.** Its F1 is 0.67 against 0.79 and its
+  false-positive rate is 2.10% against 0.84%. The case for the graph model rests
+  on the 16 complementary catches, not on beating the baseline.
+- **Distribution shift is reported, not modelled.** The illicit share collapses
+  after the step ~43 dark-market shutdown, and there is no temporal GNN or
+  retraining over time.
+- **No hyperparameter search.** Each model uses one reasonable config, so these
+  numbers are not tuned upper bounds.
+- **Explanations are qualitative.** Typology labels come from reading 5
+  GNNExplainer subgraphs by hand, and one of them (txId 149798584) is reported
+  as *unclear*. The labels are not validated against ground-truth typologies,
+  because Elliptic does not provide any.
+- **Anonymised features.** Elliptic's 165 features are unnamed, so
+  feature-level explanations are not meaningful. Only structural (edge)
+  explanations are.
+- **Single dataset, offline batch only.** There is no serving path, streaming
+  or calibration of alert thresholds.
